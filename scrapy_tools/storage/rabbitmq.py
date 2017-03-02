@@ -40,7 +40,8 @@ class RabbitMQSignal():
         con = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
         self.channel = con.channel()
         result = self.channel.queue_declare(queue='crawler', durable=True, exclusive=False)
-        self.channel.exchange_declare(durable=False, exchange='mq_publish', type='direct', )
+        # pub/sub模式
+        self.channel.exchange_declare(durable=False, exchange='mq_publish', type='fanout', )
         self.channel.queue_bind(exchange='mq_publish', queue=result.method.queue, routing_key='', )
 
     def spider_closed(self, spider, reason):
