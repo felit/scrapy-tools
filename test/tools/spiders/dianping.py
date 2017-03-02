@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import scrapy
 from tools.items import DianpingItem
-
+from datetime import datetime
 # from scrapy_tools.storage.rabbitmq import RabbitMQSignal
 class DianpingSpider(scrapy.Spider):
     name = "dianping"
@@ -24,4 +24,5 @@ class DianpingSpider(scrapy.Spider):
     def parse(self, response):
         item = DianpingItem()
         item['title'] = 'dian ping'
+        item['date'] = datetime.today()
         yield item

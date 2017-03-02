@@ -11,3 +11,4 @@ import scrapy
 class DianpingItem(scrapy.Item):
     # define the fields for your item here like:
     title = scrapy.Field()
+    date = scrapy.Field()
