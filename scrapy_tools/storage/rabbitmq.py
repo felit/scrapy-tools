@@ -13,18 +13,29 @@ from datetime import datetime
 
 
 class RabbitMQSignal():
-    def __init__(self, crawler):
-        self.host = 'localhost'
-        self.queue = 'crawler'
-        self.exchange = 'mq_publish'
+    def __init__(self, crawler, host='localhost', queue='crawler', exchange='exchange'):
+        self.host = host
+        self.queue = queue
+        self.exchange = exchange
         crawler.signals.connect(self.item_scraped, signal=signals.item_scraped)
         crawler.signals.connect(self.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
         crawler.signals.connect(self.spider_error, signal=signals.spider_error)
 
     @classmethod
+    def from_settings(cls, crawler, settings):
+        params = {
+            'server': settings['RABBITMQ_SERVER'],
+            'crawler': crawler
+        }
+        params['queue'] = settings['RABBITMQ_QUEUE']
+        params['exchange'] = settings['RABBITMQ_EXCHANGE']
+        return cls(**params)
+
+    @classmethod
     def from_crawler(cls, crawler):
-        return cls(crawler)
+
+        return cls.from_settings(crawler,crawler.settings)
 
     def item_scraped(self, item, spider):
         map = {}
