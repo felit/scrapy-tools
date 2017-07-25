@@ -13,10 +13,12 @@ from datetime import datetime
 
 
 class RabbitMQSignal():
-    def __init__(self, crawler, host='localhost', queue='crawler', exchange='exchange'):
+    def __init__(self, crawler, host='localhost', queue='crawler', exchange='exchange', username=None, password=None):
         self.host = host
         self.queue = queue
         self.exchange = exchange
+        self.username = username
+        self.password = password
         crawler.signals.connect(self.item_scraped, signal=signals.item_scraped)
         crawler.signals.connect(self.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
@@ -25,17 +27,19 @@ class RabbitMQSignal():
     @classmethod
     def from_settings(cls, crawler, settings):
         params = {
-            'server': settings['RABBITMQ_SERVER'],
+            'host': settings['RABBITMQ_SERVER'],
             'crawler': crawler
         }
         params['queue'] = settings['RABBITMQ_QUEUE']
         params['exchange'] = settings['RABBITMQ_EXCHANGE']
+        params['username'] = settings['RABBITMQ_USERNAME']
+        params['password'] = settings['RABBITMQ_PASSWORD']
         return cls(**params)
 
     @classmethod
     def from_crawler(cls, crawler):
 
-        return cls.from_settings(crawler,crawler.settings)
+        return cls.from_settings(crawler, crawler.settings)
 
     def item_scraped(self, item, spider):
         map = {}
@@ -51,7 +55,11 @@ class RabbitMQSignal():
         print 'from rabbitmq signal:%s' % (json.dumps(map))
 
     def spider_opened(self, spider):
-        con = pika.BlockingConnection(pika.ConnectionParameters(self.host))
+        if self.username is not None:
+            user_pwd = pika.PlainCredentials(self.username, self.password)
+            con = pika.BlockingConnection(pika.ConnectionParameters(self.host, user_pwd))
+        else:
+            con = pika.BlockingConnection(pika.ConnectionParameters(self.host))
         self.channel = con.channel()
         result = self.channel.queue_declare(queue=self.queue, durable=True, exclusive=False)
         # pub/sub模式
