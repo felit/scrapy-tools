@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 from datetime import datetime
 
 
-class RabbitMQSignal():
+class RabbitMQStore():
     """
       默认host: localhost
       queue: crawler
@@ -30,8 +30,8 @@ class RabbitMQSignal():
         crawler.signals.connect(self.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
         crawler.signals.connect(self.spider_error, signal=signals.spider_error)
-        self.saved_queue_key = "rabbitmq_queue_key"
-        self.saved_exchange_key = "rabbitmq_exchange_key"
+        self.saved_queue_key = "RABBITMQ_QUEUE_KEY"
+        self.saved_exchange_key = "RABBITMQ_EXCHANGE_KEY"
         self.queue_declared = []
 
     @classmethod
@@ -70,7 +70,7 @@ class RabbitMQSignal():
                                    routing_key=queue,
                                    body=json.dumps(map),
                                    properties=pika.BasicProperties(delivery_mode=2, ))
-        print 'from rabbitmq signal:%s' % (json.dumps(map))
+        # print 'from rabbitmq signal:%s' % (json.dumps(map))
 
     def spider_opened(self, spider):
         if self.username is not None:
@@ -94,9 +94,12 @@ class RabbitMQSignal():
         self.channel.queue_bind(exchange=exchange, queue=result.method.queue, routing_key='', )
 
     def spider_closed(self, spider, reason):
-        self.channel.close()
+        if not self.channel.is_closed:
+            self.channel.close()
 
     def spider_error(self, failure, response, spider):
-        self.channel.close()
+        # if not self.channel.is_closed:
+        #     self.channel.close()
+        pass
 
 
