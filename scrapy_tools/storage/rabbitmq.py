@@ -55,14 +55,15 @@ class RabbitMQSignal():
         queue = self.queue
 
         for key, val in item.items():
-            if key == self.saved_exchange_key or key == self.saved_queue_key:
-                queue = self.saved_queue_key
-                exchange = self.saved_exchange_key
+            if key == self.saved_exchange_key:
+                exchange = val
+            elif key == self.saved_queue_key:
+                queue = val
             elif isinstance(val, datetime):
                 map[key] = val.strftime('%Y-%m-%d %H:%M:%S')
             else:
                 map[key] = val
-        #  如果队列没有声明过 则声明队列
+        # 如果队列没有声明过 则声明队列
         if queue != self.queue and exchange is not None and queue not in self.queue_declared:
             self.declare(queue, exchange)
         self.channel.basic_publish(exchange='',
