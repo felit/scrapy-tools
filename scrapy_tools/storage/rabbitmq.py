@@ -13,6 +13,13 @@ from datetime import datetime
 
 
 class RabbitMQSignal():
+    """
+      默认host: localhost
+      queue: crawler
+      exchange: exchange
+      TODO 添加 依据item字段识别至不同的队列里面
+    """
+
     def __init__(self, crawler, host='localhost', queue='crawler', exchange='exchange', username=None, password=None):
         self.host = host
         self.queue = queue
@@ -23,6 +30,9 @@ class RabbitMQSignal():
         crawler.signals.connect(self.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
         crawler.signals.connect(self.spider_error, signal=signals.spider_error)
+        self.saved_queue_key = "rabbitmq_queue_key"
+        self.saved_exchange_key = "rabbitmq_exchange_key"
+        self.queue_declared = []
 
     @classmethod
     def from_settings(cls, crawler, settings):
@@ -38,18 +48,25 @@ class RabbitMQSignal():
 
     @classmethod
     def from_crawler(cls, crawler):
-
         return cls.from_settings(crawler, crawler.settings)
 
     def item_scraped(self, item, spider):
         map = {}
+        queue = self.queue
+
         for key, val in item.items():
-            if isinstance(val, datetime):
+            if key == self.saved_exchange_key or key == self.saved_queue_key:
+                queue = self.saved_queue_key
+                exchange = self.saved_exchange_key
+            elif isinstance(val, datetime):
                 map[key] = val.strftime('%Y-%m-%d %H:%M:%S')
             else:
                 map[key] = val
+        #  如果队列没有声明过 则声明队列
+        if queue != self.queue and exchange is not None and queue not in self.queue_declared:
+            self.declare(queue, exchange)
         self.channel.basic_publish(exchange='',
-                                   routing_key=self.queue,
+                                   routing_key=queue,
                                    body=json.dumps(map),
                                    properties=pika.BasicProperties(delivery_mode=2, ))
         print 'from rabbitmq signal:%s' % (json.dumps(map))
@@ -61,10 +78,19 @@ class RabbitMQSignal():
         else:
             con = pika.BlockingConnection(pika.ConnectionParameters(self.host))
         self.channel = con.channel()
-        result = self.channel.queue_declare(queue=self.queue, durable=True, exclusive=False)
+        self.declare(self.queue, self.exchange)
+
+    def declare(self, queue, exchange):
+        """
+
+        :param queue:
+        :param exchange:
+        :return:
+        """
+        result = self.channel.queue_declare(queue=queue, durable=True, exclusive=False)
         # pub/sub模式
-        self.channel.exchange_declare(durable=True, exchange=self.exchange, type='fanout', )
-        self.channel.queue_bind(exchange=self.exchange, queue=result.method.queue, routing_key='', )
+        self.channel.exchange_declare(durable=True, exchange=exchange, type='fanout', )
+        self.channel.queue_bind(exchange=exchange, queue=result.method.queue, routing_key='', )
 
     def spider_closed(self, spider, reason):
         self.channel.close()
