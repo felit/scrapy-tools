@@ -20,12 +20,22 @@ class RabbitMQStore():
       TODO 添加 依据item字段识别至不同的队列里面
     """
 
-    def __init__(self, crawler, host='localhost', queue='crawler', exchange='exchange', username=None, password=None):
+    def __init__(self,
+                 crawler,
+                 host='localhost',
+                 queue='crawler',
+                 exchange='exchange',
+                 username=None,
+                 password=None,
+                 port=5672,
+                 virtual_host="/"):
         self.host = host
         self.queue = queue
         self.exchange = exchange
         self.username = username
         self.password = password
+        self.port = port
+        self.virtual_host = virtual_host
         crawler.signals.connect(self.item_scraped, signal=signals.item_scraped)
         crawler.signals.connect(self.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
@@ -40,10 +50,12 @@ class RabbitMQStore():
             'host': settings['RABBITMQ_SERVER'],
             'crawler': crawler
         }
+        params['port'] = settings['RABBITMQ_PORT']
         params['queue'] = settings['RABBITMQ_QUEUE']
         params['exchange'] = settings['RABBITMQ_EXCHANGE']
         params['username'] = settings['RABBITMQ_USERNAME']
         params['password'] = settings['RABBITMQ_PASSWORD']
+        params['virtual_host'] = settings['RABBITMQ_VIRTUAL_HOST']
         return cls(**params)
 
     @classmethod
@@ -66,6 +78,21 @@ class RabbitMQStore():
         # 如果队列没有声明过 则声明队列
         if queue != self.queue and exchange is not None and queue not in self.queue_declared:
             self.declare(queue, exchange)
+        """
+            Traceback (most recent call last):
+              File "/usr/local/lib/python2.7/dist-packages/twisted/internet/defer.py", line 150, in maybeDeferred
+                result = f(*args, **kw)
+              File "/usr/local/lib/python2.7/dist-packages/pydispatch/robustapply.py", line 55, in robustApply
+                return receiver(*arguments, **named)
+              File "build/bdist.linux-x86_64/egg/scrapy_tools/storage/rabbitmq.py", line 71, in item_scraped
+              File "/usr/lib/python2.7/json/__init__.py", line 244, in dumps
+                return _default_encoder.encode(obj)
+              File "/usr/lib/python2.7/json/encoder.py", line 207, in encode
+                chunks = self.iterencode(o, _one_shot=True)
+              File "/usr/lib/python2.7/json/encoder.py", line 270, in iterencode
+                return _iterencode(o, 0)
+            UnicodeDecodeError: 'utf8' codec can't decode bytes in position 0-1: invalid continuation byte
+        """
         self.channel.basic_publish(exchange='',
                                    routing_key=queue,
                                    body=json.dumps(map),
@@ -75,9 +102,13 @@ class RabbitMQStore():
     def spider_opened(self, spider):
         if self.username is not None:
             user_pwd = pika.PlainCredentials(self.username, self.password)
-            con = pika.BlockingConnection(pika.ConnectionParameters(self.host, user_pwd))
+            con = pika.BlockingConnection(
+                pika.ConnectionParameters(host=self.host,
+                                          port=self.port,
+                                          credentials=user_pwd,
+                                          virtual_host=self.virtual_host))
         else:
-            con = pika.BlockingConnection(pika.ConnectionParameters(self.host))
+            con = pika.BlockingConnection(pika.ConnectionParameters(self.host, virtual_host=self.virtual_host))
         self.channel = con.channel()
         self.declare(self.queue, self.exchange)
 
@@ -99,7 +130,7 @@ class RabbitMQStore():
 
     def spider_error(self, failure, response, spider):
         # if not self.channel.is_closed:
-        #     self.channel.close()
+        # self.channel.close()
         pass
 
 
