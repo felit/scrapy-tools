@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="scrapy-tools",
-    version="0.0.3",
+    version="0.0.4",
     description="tools for scrapy_tools, consist of middlewares",
     author="jack.cong",
     author_email='congshuanglong@126.com',

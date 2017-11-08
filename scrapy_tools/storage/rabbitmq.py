@@ -23,24 +23,23 @@ class RabbitMQStore():
     def __init__(self,
                  crawler,
                  host='localhost',
-                 queue='crawler',
                  exchange='exchange',
                  username=None,
                  password=None,
                  port=5672,
-                 virtual_host="/"):
+                 virtual_host="/", routing_key=None):
         self.host = host
-        self.queue = queue
         self.exchange = exchange
         self.username = username
         self.password = password
         self.port = port
         self.virtual_host = virtual_host
+        self.routing_key = routing_key
         crawler.signals.connect(self.item_scraped, signal=signals.item_scraped)
         crawler.signals.connect(self.spider_opened, signal=signals.spider_opened)
         crawler.signals.connect(self.spider_closed, signal=signals.spider_closed)
         crawler.signals.connect(self.spider_error, signal=signals.spider_error)
-        self.saved_queue_key = "RABBITMQ_QUEUE_KEY"
+        self.saved_routing_key = "RABBITMQ_ROUTING_KEY"
         self.saved_exchange_key = "RABBITMQ_EXCHANGE_KEY"
         self.queue_declared = []
 
@@ -51,11 +50,19 @@ class RabbitMQStore():
             'crawler': crawler
         }
         params['port'] = settings['RABBITMQ_PORT']
-        params['queue'] = settings['RABBITMQ_QUEUE']
         params['exchange'] = settings['RABBITMQ_EXCHANGE']
+        """
+         print(dir(settings))
+         'attributes', 'clear', 'copy', 'copy_to_dict', 'defaults', 'delete',
+          'freeze', 'frozen', 'frozencopy', 'get', 'getbool', 'getdict', 'getfloat',
+          'getint', 'getlist', 'getpriority', 'getwithbase', 'items', 'iteritems',
+          'iterkeys', 'itervalues', 'keys', 'maxpriority', 'overrides',
+          'pop', 'popitem', 'set', 'setdefault', 'setdict', 'setmodule', 'update', 'values'
+        """
         params['username'] = settings['RABBITMQ_USERNAME']
         params['password'] = settings['RABBITMQ_PASSWORD']
-        params['virtual_host'] = settings['RABBITMQ_VIRTUAL_HOST']
+        params['virtual_host'] = settings.get('RABBITMQ_VIRTUAL_HOST','/')
+        params['routing_key'] = settings['RABBITMQ_ROUTING_KEY']
         return cls(**params)
 
     @classmethod
@@ -64,20 +71,20 @@ class RabbitMQStore():
 
     def item_scraped(self, item, spider):
         map = {}
-        queue = self.queue
+        routing_key = self.routing_key
 
         for key, val in item.items():
             if key == self.saved_exchange_key:
                 exchange = val
-            elif key == self.saved_queue_key:
-                queue = val
+            elif key == self.saved_routing_key:
+                routing_key = val
             elif isinstance(val, datetime):
                 map[key] = val.strftime('%Y-%m-%d %H:%M:%S')
             else:
                 map[key] = val
         # 如果队列没有声明过 则声明队列
-        if queue != self.queue and exchange is not None and queue not in self.queue_declared:
-            self.declare(queue, exchange)
+        # if routing_key != self.routing_key and exchange is not None and routing_key not in self.queue_declared:
+        #     self.declare(routing_key, exchange)
         """
             Traceback (most recent call last):
               File "/usr/local/lib/python2.7/dist-packages/twisted/internet/defer.py", line 150, in maybeDeferred
@@ -93,11 +100,10 @@ class RabbitMQStore():
                 return _iterencode(o, 0)
             UnicodeDecodeError: 'utf8' codec can't decode bytes in position 0-1: invalid continuation byte
         """
-        self.channel.basic_publish(exchange='',
-                                   routing_key=queue,
+        self.channel.basic_publish(exchange=self.exchange,
+                                   routing_key=routing_key,
                                    body=json.dumps(map),
                                    properties=pika.BasicProperties(delivery_mode=2, ))
-        # print 'from rabbitmq signal:%s' % (json.dumps(map))
 
     def spider_opened(self, spider):
         if self.username is not None:
@@ -110,7 +116,6 @@ class RabbitMQStore():
         else:
             con = pika.BlockingConnection(pika.ConnectionParameters(self.host, virtual_host=self.virtual_host))
         self.channel = con.channel()
-        self.declare(self.queue, self.exchange)
 
     def declare(self, queue, exchange):
         """
@@ -127,6 +132,8 @@ class RabbitMQStore():
     def spider_closed(self, spider, reason):
         if not self.channel.is_closed:
             self.channel.close()
+            if not self.channel.connection:
+                self.channel.connection.close()
 
     def spider_error(self, failure, response, spider):
         # if not self.channel.is_closed:
