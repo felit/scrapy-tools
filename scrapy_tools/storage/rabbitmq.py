@@ -50,7 +50,7 @@ class RabbitMQStore():
             'crawler': crawler
         }
         params['port'] = settings['RABBITMQ_PORT']
-        params['exchange'] = settings['RABBITMQ_EXCHANGE']
+        params['exchange'] = settings['RABBITMQ_EXCHANGE_KEY']
         """
          print(dir(settings))
          'attributes', 'clear', 'copy', 'copy_to_dict', 'defaults', 'delete',
@@ -72,7 +72,7 @@ class RabbitMQStore():
     def item_scraped(self, item, spider):
         map = {}
         routing_key = self.routing_key
-
+        exchange = self.exchange
         for key, val in item.items():
             if key == self.saved_exchange_key:
                 exchange = val
@@ -100,7 +100,7 @@ class RabbitMQStore():
                 return _iterencode(o, 0)
             UnicodeDecodeError: 'utf8' codec can't decode bytes in position 0-1: invalid continuation byte
         """
-        self.channel.basic_publish(exchange=self.exchange,
+        self.channel.basic_publish(exchange=exchange,
                                    routing_key=routing_key,
                                    body=json.dumps(map),
                                    properties=pika.BasicProperties(delivery_mode=2, ))
