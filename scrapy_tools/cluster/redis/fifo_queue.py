@@ -1,0 +1,2 @@
+class FiFoQueue():
+    pass
